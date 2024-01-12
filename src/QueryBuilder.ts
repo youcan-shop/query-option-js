@@ -1,16 +1,23 @@
 import { QueryOption, FilterCondition, Sort, Pagination } from './types';
 
 export class QueryBuilder {
+    private _search: string = '';
     private _filters: FilterCondition[] = [];
     private _sort: Sort = {};
     private _pagination: Pagination = { page: 1, limit: 10 };
 
     constructor(options?: QueryOption) {
         if (options) {
+            if (options.search) this.setSearch(options.search);
             if (options.filters) this.setFilters(options.filters);
             if (options.sort) this.setSort(options.sort);
             if (options.pagination) this.setPagination(options.pagination);
         }
+    }
+
+    private setSearch(search: string): QueryBuilder {
+        this._search =search;
+        return this;
     }
 
     private setFilters(filters: FilterCondition[]): QueryBuilder {
@@ -36,6 +43,10 @@ export class QueryBuilder {
         return this._sort;
     }
 
+    public getSearch(): string {
+        return this._search;
+    }
+
     public getPagination(): Pagination {
         return this._pagination;
     }
@@ -44,6 +55,7 @@ export class QueryBuilder {
         const url = new URL(uri, 'https://fake.com');
         const params = new URLSearchParams(url.search);
 
+        let search: string = '';
         const filters: FilterCondition[] = [];
         const sort: Sort = {};
         let pagination: Pagination = { page: 1, limit: 10 };
@@ -61,10 +73,12 @@ export class QueryBuilder {
                 }
             } else if (key === 'page' || key === 'limit') {
                 pagination = { ...pagination, [key]: parseInt(value) };
+            } else if (key === 'q') {
+                search = value;
             }
         });
 
-        return new QueryBuilder(QueryOption.create(filters, sort, pagination));
+        return new QueryBuilder(QueryOption.create(search, filters, sort, pagination));
     }
 
     public fromCurrent(): string {
@@ -83,7 +97,7 @@ export class QueryBuilder {
             parts.push(Object.entries(this._sort).map(([field, order]) => `sort[${encodeURIComponent(field)}]=${order}`).join('&'));
         }
 
-        parts.push(`page=${this._pagination.page}&limit=${this._pagination.limit}`);
+        parts.push(`q=${this._search}&page=${this._pagination.page}&limit=${this._pagination.limit}`);
 
         return parts.filter(part => part).join('&');
     }
