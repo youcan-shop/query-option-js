@@ -2,6 +2,7 @@
   "name": "@youcan/query-option",
   "version": "1.0.0",
   "type": "module",
+  "private": false,
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
@@ -17,7 +18,7 @@
     "test": "jest",
     "build": "unbuild",
     "bump": "bumpp package.json --commit \"[chore]: Release v\" --push --tag",
-    "release": "pnpm build && pnpm bump && pnpm publish --access public"
+    "release": "npm run build && npm run bump && npm run publish --access public"
   },
   "author": "YouCan <tech@youcan.shop>",
   "license": "MIT",
