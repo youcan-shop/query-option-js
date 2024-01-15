@@ -9,7 +9,10 @@ export interface FilterCondition {
 export type Filters = FilterCondition[];
 
 export type SortOrder = 'asc' | 'desc';
-export type Sort = Record<string, SortOrder>;
+export interface Sort {
+    field: string;
+    value: SortOrder;
+}
 
 export interface Pagination {
     page: number;

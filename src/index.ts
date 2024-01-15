@@ -1,10 +1,11 @@
-import { QueryOption, FilterCondition, Sort, Pagination } from './types';
+import {FilterCondition, Pagination, QueryOption, Sort} from './types';
+import {slice} from "./helpers";
 
 export class QueryBuilder {
     private _search: string = '';
     private _filters: FilterCondition[] = [];
-    private _sort: Sort = {};
-    private _pagination: Pagination = { page: 1, limit: 10 };
+    private _sort: Sort = {field: 'created_at', value: 'desc'};
+    private _pagination: Pagination = {page: 1, limit: 10};
 
     constructor(options?: QueryOption) {
         if (options) {
@@ -16,7 +17,7 @@ export class QueryBuilder {
     }
 
     private setSearch(search: string): QueryBuilder {
-        this._search =search;
+        this._search = search;
         return this;
     }
 
@@ -51,54 +52,93 @@ export class QueryBuilder {
         return this._pagination;
     }
 
-    public static fromUri(uri: string): QueryBuilder {
-        const url = new URL(uri, 'https://fake.com');
-        const params = new URLSearchParams(url.search);
+    public static parsePage(str: string): Number {
+        const regex = /page\=([^&]*)\&?/gmi;
+        let m = regex.exec(str);
 
-        let search: string = '';
-        const filters: FilterCondition[] = [];
-        const sort: Sort = {};
-        let pagination: Pagination = { page: 1, limit: 10 };
+        return (m ? parseInt(m[1]) : 1) as Number;
+    }
 
-        params.forEach((value, key) => {
-            if (key.startsWith('filters[')) {
-                const field = key.match(/\[([^)]+)]/)?.[1];
-                if (field) {
-                    filters.push({ field, value });
-                }
-            } else if (key.startsWith('sort[')) {
-                const field = key.match(/\[([^)]+)]/)?.[1];
-                if (field) {
-                    sort[field] = value as 'asc' | 'desc';
-                }
-            } else if (key === 'page' || key === 'limit') {
-                pagination = { ...pagination, [key]: parseInt(value) };
-            } else if (key === 'q') {
-                search = value;
+    public static parseLimit(str: string): Number {
+        const regex = /limit\=([^&]*)\&?/gmi;
+        let m = regex.exec(str);
+
+        return (m ? parseInt(m[1]) : 10) as Number;
+    }
+
+    public static parseSearch(str: string): string {
+        const regex = /q\=([^&]*)\&?/gmi;
+        let m = regex.exec(str);
+
+        return m ? m[1] : '';
+    }
+
+    public static parseSort(str: string): Sort {
+        const regex = /sort\[(field|value)\]\=([^&]+)\&?/gmi;
+        let sort = {field: "", value: ""};
+        let m;
+
+        while ((m = regex.exec(str)) !== null) {
+            if (m.index === regex.lastIndex) {
+                regex.lastIndex++;
             }
+
+            if (m[1] == 'field') {
+                sort.field = m[2];
+            } else if (m[1] == 'value') {
+                sort.value = m[2];
+            }
+        }
+
+        return sort as Sort;
+    }
+
+    public static parseFilters(str: string): Array<FilterCondition> {
+        const regex = /filters\[(\d+)\]\[(field|value|operator)\]\=([^&]+)\&?/gmi;
+        let m, matches: any[] = [];
+
+        while ((m = regex.exec(str)) !== null) {
+            if (m.index === regex.lastIndex) {
+                regex.lastIndex++;
+            }
+
+            let matchSlices = slice(m, 4);
+            matchSlices.forEach((match) => {
+                const index = parseInt(match[1]);
+
+                if (!matches[index]) {
+                    matches[index] = {};
+                }
+
+                matches[index][match[2]] = match[3];
+            });
+        }
+
+        return matches;
+    }
+
+    public static fromUri(uri: string): QueryBuilder {
+        const paramString = decodeURI(uri);
+
+        const filters = this.parseFilters(paramString).map((filter) => {
+            return filter;
         });
+        const search = this.parseSearch(paramString);
+        const sort = this.parseSort(paramString);
+        const pagination = {
+            page: this.parsePage(paramString),
+            limit: this.parseLimit(paramString)
+        } as Pagination;
 
         return new QueryBuilder(QueryOption.create(search, filters, sort, pagination));
     }
 
-    public fromCurrent(): string {
-        const parts: string[] = [];
+    public static fromCurrent(): QueryBuilder {
+        return QueryBuilder.fromUri(document.location.search);
+    }
 
-        if (this._filters.length > 0) {
-            const filters = this._filters.map(filter => {
-                const operator = filter.operator || '=';
-                return `${encodeURIComponent(filter.field)}${operator}${encodeURIComponent(filter.value)}`;
-            }).join('&');
-
-            parts.push(filters);
-        }
-
-        if (Object.keys(this._sort).length > 0) {
-            parts.push(Object.entries(this._sort).map(([field, order]) => `sort[${encodeURIComponent(field)}]=${order}`).join('&'));
-        }
-
-        parts.push(`q=${this._search}&page=${this._pagination.page}&limit=${this._pagination.limit}`);
-
-        return parts.filter(part => part).join('&');
+    public toString(): string {
+        return `q=${this._search}&sort[field]=${this._sort}&sort[value]=${this._sort}&page=${this._pagination.page}&limit=${this._pagination.limit}&` +
+            this._filters.map((f, i) => `filters[${i}][field]=[${f.field}]&filters[${i}][value]=[${f.value}]&filters[${i}][operator]=[${f.operator}]`).join('&');
     }
 }
